@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react"],
+  "rules": {
+    "no-unused-vars": "error",
+    "no-undef": "error",
+    "react/jsx-key": "error",
+    "react/jsx-no-duplicate-props": "error",
+    "react/set-state-in-effect": "off",
+    "react/purity": "off",
+    "react-hooks/exhaustive-deps": "off"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  }
+}
