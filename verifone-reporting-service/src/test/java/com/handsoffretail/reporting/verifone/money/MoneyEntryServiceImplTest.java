@@ -66,6 +66,7 @@ class MoneyEntryServiceImplTest {
         values.put("check_deposit", new BigDecimal("45.6"));
         values.put("card_batch", new BigDecimal("257"));
         values.put("cash_deposit", null); // back to the POS figure
+        values.put("atm_trans", new BigDecimal("12"));
         service.save(STAFF, 2, DAY, request(3, values));
 
         ArgumentCaptor<Map<MoneyField, BigDecimal>> changes = ArgumentCaptor.forClass(Map.class);
@@ -75,6 +76,8 @@ class MoneyEntryServiceImplTest {
         assertThat(changes.getValue().get(MoneyField.CARD_BATCH)).isEqualByComparingTo("257");
         assertThat(changes.getValue()).containsKey(MoneyField.CASH_DEPOSIT);
         assertThat(changes.getValue().get(MoneyField.CASH_DEPOSIT)).isNull();
+        assertThat(changes.getValue().get(MoneyField.ATM_TRANS)).isEqualByComparingTo("12");
+        assertThat(changes.getValue().get(MoneyField.ATM_TRANS).scale()).isZero();
     }
 
     @Test
@@ -89,6 +92,8 @@ class MoneyEntryServiceImplTest {
         assertValidation(request(0, Map.of("check_deposit", new BigDecimal("1.005"))), "check_deposit");
         assertValidation(request(0, Map.of("card_batch", new BigDecimal("2.555"))), "card_batch");
         assertValidation(request(0, Map.of("cash_deposit", new BigDecimal("10000000000.00"))), "cash_deposit");
+        assertValidation(request(0, Map.of("atm_trans", new BigDecimal("-1"))), "atm_trans");
+        assertValidation(request(0, Map.of("atm_trans", new BigDecimal("2.5"))), "atm_trans");
         assertValidation(request(null, Map.of("check_deposit", BigDecimal.ONE)), "version");
         assertValidation(request(0, Map.of()), "values");
         verify(repository, never()).save(anyLong(), any(), anyInt(), any(), anyLong(), anyString());

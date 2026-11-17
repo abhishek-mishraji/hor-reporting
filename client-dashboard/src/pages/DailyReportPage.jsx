@@ -231,43 +231,118 @@ export const MONEY_FIELDS = {
   cash_deposit: 'amount',
   check_deposit: 'amount',
   card_batch: 'amount',
+  generic_card_1: 'amount',
+  generic_card_2: 'amount',
+  ebt: 'amount',
+  cash_purchases: 'amount',
+  cash_expenses: 'amount',
+  general_account_paid: 'amount',
+  other_income: 'amount',
+  cust_account_sales: 'amount',
+  cust_account_payments: 'amount',
+  general_account_received: 'amount',
+  atm_trans: 'count',
+  atm_dispensed: 'amount',
+  atm_fee: 'amount',
 };
 
 /**
- * The "Safe Deposits" figures shown on the page: the entered value where admin / staff entered one, the POS
- * value otherwise. Cash deposit = POS safe drops; check deposit is not in the POS (0); card batch = POS card
- * payments. Each field: { pos, value, edited } (amounts as "0.00" strings).
- * - total = Total deposits = cash deposit + check deposit
- * - card  = credit card batch
- * `out` is the result of moneyOut (POS figures).
+ * The Money Out figures shown on the page: the entered value where admin / staff entered one, the POS value
+ * otherwise. POS defaults: cash deposit = safe drops, card batch = card payments, EBT = EBT payments, cash
+ * purchases = paid-outs, other income = pay-ins, cust account sales = house charges; every other row is not in
+ * the POS (0). Each field: { pos, value, edited } (amounts as "0.00" strings, the ATM count as a number).
+ * - totalDeposits = cash deposit + check deposit
+ * - atmNet        = ATM amount dispensed + ATM fee collected (display only)
+ * - out           = the figures dailyTotals counts (same keys as moneyOut, plus the rows the POS lacks)
+ * `pos` is the result of moneyOut (POS figures).
  */
-export function depositFigures(out, entered) {
-  const pos = { cash_deposit: out.deposits, check_deposit: '0.00', card_batch: out.card };
+export function moneyOutFigures(pos, entered) {
+  const posValues = {
+    cash_deposit: pos.deposits,
+    check_deposit: '0.00',
+    card_batch: pos.card,
+    generic_card_1: '0.00',
+    generic_card_2: '0.00',
+    ebt: pos.ebt,
+    cash_purchases: pos.paidOuts,
+    cash_expenses: '0.00',
+    general_account_paid: '0.00',
+    other_income: pos.payIns,
+    cust_account_sales: pos.house,
+    cust_account_payments: '0.00',
+    general_account_received: '0.00',
+    atm_trans: 0,
+    atm_dispensed: '0.00',
+    atm_fee: '0.00',
+  };
   const values = entered || {};
   const fields = {};
-  for (const key of Object.keys(MONEY_FIELDS)) {
+  for (const [key, kind] of Object.entries(MONEY_FIELDS)) {
     const has = values[key] !== undefined && values[key] !== null;
-    fields[key] = { pos: pos[key], value: fromCents(toCents(has ? values[key] : pos[key])), edited: has };
+    const raw = has ? values[key] : posValues[key];
+    fields[key] = {
+      pos: posValues[key],
+      value: kind === 'count' ? Number(raw) || 0 : fromCents(toCents(raw)),
+      edited: has,
+    };
   }
-  const c = (key) => toCents(fields[key].value);
-  return { fields, total: fromCents(c('cash_deposit') + c('check_deposit')), card: fields.card_batch.value };
+  const v = (key) => fields[key].value;
+  const c = (key) => toCents(v(key));
+  const totalDeposits = fromCents(c('cash_deposit') + c('check_deposit'));
+  return {
+    fields,
+    totalDeposits,
+    atmNet: fromCents(c('atm_dispensed') + c('atm_fee')),
+    out: {
+      deposits: totalDeposits,
+      card: v('card_batch'),
+      generic1: v('generic_card_1'),
+      generic2: v('generic_card_2'),
+      ebt: v('ebt'),
+      paidOuts: v('cash_purchases'),
+      cashExpenses: v('cash_expenses'),
+      generalPaid: v('general_account_paid'),
+      payIns: v('other_income'),
+      house: v('cust_account_sales'),
+      custPayments: v('cust_account_payments'),
+      generalReceived: v('general_account_received'),
+    },
+  };
 }
 
 /**
  * Footer totals of one day (strings, 2 decimals).
  * - Money In  = Total Grocery + Total Gas Amt Sold + sales tax
- *   + lottery (sales + settlement + commission, see lotteryFigures).
- * - Money Out = following the signs of the paper report: every "− $" row added, every "+ $" row subtracted:
- *   deposits + card batch + EBT + cash purchases (paid-outs) + customer account sales (house)
- *   + lottery (cashes + adjustment + credits) − other income (pay-ins).
- *   Rows the POS does not have are 0 and change nothing until admin / staff enter them.
- * `lottery` is the result of lotteryFigures (entered values already applied).
+ *   + lottery (sales + settlement + commission, see lotteryFigures)
+ *   + Other Money Received (cust account payments + general account received).
+ * - Money Out = following the signs of the paper report: every "− $" row added, "+ $" Other Income subtracted:
+ *   total deposits + card batch + generic cards 1 and 2 + EBT + cash purchases + cash expenses
+ *   + general account paid + cust account sales + lottery (cashes + adjustment + credits) − other income.
+ * - ATM Reading is display only.
+ * `lottery` is the result of lotteryFigures and `out` the `out` of moneyOutFigures (entered values applied);
+ * missing keys count as 0.
  */
 export function dailyTotals({ merch, grades, lottery, tax, out }) {
-  const moneyIn = sumCents(merch, 'amount') + sumCents(grades, 'amount') + lottery.moneyInCents + toCents(tax);
   const c = (k) => toCents(out[k]);
+  const moneyIn =
+    sumCents(merch, 'amount') +
+    sumCents(grades, 'amount') +
+    lottery.moneyInCents +
+    toCents(tax) +
+    c('custPayments') +
+    c('generalReceived');
   const moneyOut =
-    c('deposits') + c('card') + c('ebt') + c('paidOuts') + c('house') + lottery.moneyOutCents - c('payIns');
+    c('deposits') +
+    c('card') +
+    c('generic1') +
+    c('generic2') +
+    c('ebt') +
+    c('paidOuts') +
+    c('cashExpenses') +
+    c('generalPaid') +
+    c('house') +
+    lottery.moneyOutCents -
+    c('payIns');
   // Over/Short = Total Money Out − Total Money In (negative = short, positive = over).
   return { moneyIn: fromCents(moneyIn), moneyOut: fromCents(moneyOut), overShort: fromCents(moneyOut - moneyIn) };
 }
@@ -371,11 +446,17 @@ export function DailyReportPage() {
   const moves = useReport((p) => getCashMovements(p.vendor, { store: p.store, from: p.to, to: p.to }));
   const posOut = useMemo(() => moneyOut(payments.data, moves.data), [payments.data, moves.data]);
 
-  // Safe Deposits figures entered by admin / staff (cash / check deposit, card batch).
+  // Money Out figures entered by admin / staff (every Money Out table; they replace the POS figure field by field).
   const [moneyReload, setMoneyReload] = useState(0);
   const moneyEntry = useReport((p) => getMoneyEntry(p.vendor, { store: p.store, date: p.to }), [moneyReload]);
-  const deposits = useMemo(() => depositFigures(posOut, moneyEntry.data?.values), [posOut, moneyEntry.data]);
-  const out = useMemo(() => ({ ...posOut, deposits: deposits.total, card: deposits.card }), [posOut, deposits]);
+  const money = useMemo(() => moneyOutFigures(posOut, moneyEntry.data?.values), [posOut, moneyEntry.data]);
+  const out = money.out;
+  const moneyEditProps = {
+    fields: money.fields,
+    kinds: MONEY_FIELDS,
+    canEdit: Boolean(moneyEntry.data?.can_edit),
+    onSave: (values) => saveMoney(values),
+  };
   const saveMoney = async (values) => {
     try {
       await saveMoneyEntry(
@@ -577,12 +658,14 @@ export function DailyReportPage() {
                 <div>
                   {moneyEntry.error && (
                     <div className="lottery-edit__message" role="alert">
-                      Entered deposit figures could not be loaded; POS figures are shown.
+                      Entered Money Out figures could not be loaded; POS figures are shown.
                     </div>
                   )}
                   <LotteryEditBlock
+                    {...moneyEditProps}
                     title="Safe Deposits"
                     note={`${dayLabel} · cash deposit = safe drops; check deposit is not recorded by the register (0.00 until entered); card batch = all card payments (credit, debit, pump, mobile).`}
+                    lastEdited={moneyLastEdited}
                     rows={[
                       { key: 'cash_deposit', label: 'Cash deposit', symbol: '− $', tone: 'minus' },
                       { key: 'check_deposit', label: 'Check deposit', symbol: '− $', tone: 'minus' },
@@ -592,138 +675,74 @@ export function DailyReportPage() {
                         symbol: '− $',
                         tone: 'minus',
                         computed: true,
-                        value: deposits.total,
+                        value: money.totalDeposits,
                       },
                       { key: 'card_batch', label: 'Credit card batch', symbol: '− $', tone: 'minus' },
                     ]}
-                    fields={deposits.fields}
-                    kinds={MONEY_FIELDS}
-                    canEdit={Boolean(moneyEntry.data?.can_edit)}
-                    onSave={saveMoney}
-                    lastEdited={moneyLastEdited}
                   />
-                  <SummaryBlock
+                  <LotteryEditBlock
+                    {...moneyEditProps}
                     title="Credit Card 2 (Credited in Bank)"
-                    symbol="− $"
-                    type="money"
+                    note="Not recorded by the register: 0.00 until entered."
+                    lastEdited={moneyLastEdited}
                     rows={[
-                      {
-                        key: 'generic1',
-                        label: 'Sales by generic card 1',
-                        tone: 'minus',
-                        value: ZERO,
-                      },
-                      {
-                        key: 'generic2',
-                        label: 'Sales by generic card 2',
-                        tone: 'minus',
-                        value: ZERO,
-                      },
+                      { key: 'generic_card_1', label: 'Sales by generic card 1', symbol: '− $', tone: 'minus' },
+                      { key: 'generic_card_2', label: 'Sales by generic card 2', symbol: '− $', tone: 'minus' },
                     ]}
                   />
-                  <SummaryBlock
+                  <LotteryEditBlock
+                    {...moneyEditProps}
                     title="Bank Deposits"
-                    symbol="− $"
-                    type="money"
-                    rows={[
-                      {
-                        key: 'ebt',
-                        label: 'EBT/Foodstamp',
-                        tone: 'minus',
-                        value: out.ebt,
-                      },
-                    ]}
+                    note="EBT/Foodstamp = EBT payments at the register."
+                    lastEdited={moneyLastEdited}
+                    rows={[{ key: 'ebt', label: 'EBT/Foodstamp', symbol: '− $', tone: 'minus' }]}
                   />
                 </div>
 
                 <div>
-                  <SummaryBlock
+                  <LotteryEditBlock
+                    {...moneyEditProps}
                     title="Cash Purchases"
-                    note="Cash purchases = store paid-outs. Other income = pay-ins. Customer account sales = house charges."
-                    symbol="− $"
-                    type="money"
+                    note="Cash purchases = store paid-outs. Other income = pay-ins. Customer account sales = house charges. Cash expenses and general account paid: 0.00 until entered."
+                    lastEdited={moneyLastEdited}
                     rows={[
+                      { key: 'cash_purchases', label: 'Cash Purchases', symbol: '− $', tone: 'minus' },
+                      { key: 'cash_expenses', label: 'Cash Expenses', symbol: '− $', tone: 'minus' },
+                      { key: 'general_account_paid', label: 'General Account paid', symbol: '− $', tone: 'minus' },
+                      { key: 'other_income', label: 'Other Income', symbol: '+ $', tone: 'plus' },
+                      { key: 'cust_account_sales', label: 'Cust account sales', symbol: '− $', tone: 'minus' },
+                    ]}
+                  />
+                  <LotteryEditBlock
+                    {...moneyEditProps}
+                    title="Other Money Received"
+                    note="Not recorded by the register: 0.00 until entered. Counted in Total Money In."
+                    lastEdited={moneyLastEdited}
+                    rows={[
+                      { key: 'cust_account_payments', label: 'Cust account payments', symbol: '+ $', tone: 'plus' },
                       {
-                        key: 'purchases',
-                        label: 'Cash Purchases',
-                        tone: 'minus',
-                        value: out.paidOuts,
-                      },
-                      {
-                        key: 'expenses',
-                        label: 'Cash Expenses',
-                        tone: 'minus',
-                        value: ZERO,
-                      },
-                      {
-                        key: 'generalPaid',
-                        label: 'General Account paid',
-                        tone: 'minus',
-                        value: ZERO,
-                      },
-                      {
-                        key: 'otherIncome',
-                        label: 'Other Income',
+                        key: 'general_account_received',
+                        label: 'General Account received',
                         symbol: '+ $',
                         tone: 'plus',
-                        value: out.payIns,
-                      },
-                      {
-                        key: 'custSales',
-                        label: 'Cust account sales',
-                        tone: 'minus',
-                        value: out.house,
-                      },
-                    ]}
-                  />
-                  <SummaryBlock
-                    title="Other Money Received"
-                    symbol="+ $"
-                    type="money"
-                    rows={[
-                      {
-                        key: 'custPayments',
-                        label: 'Cust account payments',
-                        tone: 'plus',
-                        value: ZERO,
-                      },
-                      {
-                        key: 'generalReceived',
-                        label: 'General Account received',
-                        tone: 'plus',
-                        value: ZERO,
                       },
                     ]}
                   />
                 </div>
 
                 <div>
-                  <SummaryBlock
+                  <LotteryEditBlock
+                    {...moneyEditProps}
                     title="ATM Reading"
-                    note="The ATM is not part of the register; these show 0."
-                    symbol="$"
-                    type="money"
+                    note="The ATM is not part of the register: 0 until entered. Shown only; not counted in the totals."
+                    lastEdited={moneyLastEdited}
                     rows={[
-                      {
-                        key: 'atmTrans',
-                        label: '# of ATM Trans',
-                        symbol: '#',
-                        type: 'count',
-                        value: 0,
-                      },
-                      {
-                        key: 'atmDispensed',
-                        label: 'Amt Dispensed',
-                        value: ZERO,
-                      },
-                      {
-                        key: 'atmFee',
-                        label: 'ATM Fee Collected',
-                        value: ZERO,
-                      },
+                      { key: 'atm_trans', label: '# of ATM Trans', symbol: '#' },
+                      { key: 'atm_dispensed', label: 'Amt Dispensed', symbol: '$' },
+                      { key: 'atm_fee', label: 'ATM Fee Collected', symbol: '$' },
                     ]}
                     totalLabel="ATM Net EFT"
-                    total={ZERO}
+                    total={money.atmNet}
                   />
                 </div>
               </div>

@@ -84,7 +84,8 @@ class MoneyEntryControllerTest {
 
     private static MoneyDayEntry saved() {
         return new MoneyDayEntry(2L, DAY,
-                Map.of(MoneyField.CHECK_DEPOSIT, new BigDecimal("45.60"), MoneyField.CARD_BATCH, new BigDecimal("257")),
+                Map.of(MoneyField.CHECK_DEPOSIT, new BigDecimal("45.60"), MoneyField.CARD_BATCH, new BigDecimal("257"),
+                        MoneyField.ATM_TRANS, new BigDecimal("12")),
                 3, 7L, "Sam Staff", OffsetDateTime.of(2026, 11, 17, 9, 30, 0, 0, ZoneOffset.UTC));
     }
 
@@ -99,6 +100,7 @@ class MoneyEntryControllerTest {
                 .andExpect(jsonPath("$.version").value(3))
                 .andExpect(jsonPath("$.values.check_deposit").value(45.60))
                 .andExpect(jsonPath("$.values.card_batch").value(257.00))
+                .andExpect(jsonPath("$.values.atm_trans").value(12))
                 .andExpect(jsonPath("$.values.cash_deposit").doesNotExist())
                 .andExpect(jsonPath("$.updated_by_name").value("Sam Staff"));
     }

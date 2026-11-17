@@ -58,18 +58,22 @@ class JdbcMoneyEntryRepositoryIT {
 
         MoneyDayEntry first = repository.save(storeId, DAY, 0, Map.of(
                 MoneyField.CHECK_DEPOSIT, new BigDecimal("45.60"),
-                MoneyField.CARD_BATCH, new BigDecimal("257")), 7, "Sam Staff");
+                MoneyField.CARD_BATCH, new BigDecimal("257"),
+                MoneyField.ATM_TRANS, new BigDecimal("12"),
+                MoneyField.GENERAL_ACCOUNT_RECEIVED, new BigDecimal("80.25")), 7, "Sam Staff");
         assertThat(first.version()).isEqualTo(1);
         assertThat(first.values().get(MoneyField.CHECK_DEPOSIT)).isEqualByComparingTo("45.60");
         assertThat(first.values().get(MoneyField.CARD_BATCH)).isEqualByComparingTo("257");
         assertThat(first.updatedByName()).isEqualTo("Sam Staff");
         assertThat(first.updatedAt()).isNotNull();
-        assertThat(history()).isEqualTo(2);
+        assertThat(first.values().get(MoneyField.ATM_TRANS)).isEqualByComparingTo("12");
+        assertThat(first.values().get(MoneyField.GENERAL_ACCOUNT_RECEIVED)).isEqualByComparingTo("80.25");
+        assertThat(history()).isEqualTo(4);
 
         // the same values again: nothing changes, version stays
         assertThat(repository.save(storeId, DAY, 1, Map.of(
                 MoneyField.CHECK_DEPOSIT, new BigDecimal("45.6")), 7, "Sam Staff").version()).isEqualTo(1);
-        assertThat(history()).isEqualTo(2);
+        assertThat(history()).isEqualTo(4);
 
         Map<MoneyField, BigDecimal> second = new HashMap<>();
         second.put(MoneyField.CHECK_DEPOSIT, new BigDecimal("50.00"));
@@ -79,7 +83,7 @@ class JdbcMoneyEntryRepositoryIT {
         assertThat(saved.updatedByName()).isEqualTo("Ann Admin");
         assertThat(saved.values()).doesNotContainKey(MoneyField.CASH_DEPOSIT);
         assertThat(saved.values().get(MoneyField.CARD_BATCH)).isEqualByComparingTo("257");
-        assertThat(history()).isEqualTo(3);
+        assertThat(history()).isEqualTo(5);
 
         // someone still holding version 1
         assertThatThrownBy(() -> repository.save(storeId, DAY, 1, Map.of(

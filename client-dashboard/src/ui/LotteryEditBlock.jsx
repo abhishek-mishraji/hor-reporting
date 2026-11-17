@@ -39,7 +39,7 @@ export function draftChanges(draft, fields, kinds) {
     }
     const ok = kinds[key] === 'count' ? COUNT_RE.test(t) : AMOUNT_RE.test(t);
     if (!ok) {
-      errors[key] = kinds[key] === 'count' ? 'Whole number of tickets' : 'Dollar amount, at most 2 decimals';
+      errors[key] = kinds[key] === 'count' ? 'Whole number, 0 or more' : 'Dollar amount, at most 2 decimals';
       continue;
     }
     const n = Number(t);

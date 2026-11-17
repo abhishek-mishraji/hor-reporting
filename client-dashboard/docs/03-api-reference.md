@@ -225,13 +225,18 @@ VALIDATION_FAILED` with `errors[{field, message}]` for an unknown field, more th
 fractional ticket count, or a missing `version`. Saving values that are already stored changes nothing (version
 stays). Every changed field adds one history row (old value, new value, who, when).
 
-## Money Out figures entered by admin / staff (Daily report "Safe Deposits")
+## Money Out figures entered by admin / staff (Daily report "Money Out" section)
 ### `GET /api/reports/daily-money?store&date` (V, G) — every role that may see the store
 ### `PUT /api/reports/daily-money?store&date` (V, G) — `PLATFORM_ADMIN`, `HOR_STAFF` only (`CLIENT_USER`: 403)
 Exactly the same contract (answer, PUT body, 409 / 400 errors, history) as `daily-lottery`, kept in sync by the
-same script. Stored in `report.money_day_entry` + `report.money_day_entry_change` (verifone_db migration V5,
-gilbarco_db V8). Fields, all amounts: `cash_deposit` (POS default: safe drops), `check_deposit` (not in the POS:
-0), `card_batch` (POS default: card payments). The page shows Total deposits = cash deposit + check deposit.
+same script. Stored in `report.money_day_entry` + `report.money_day_entry_change` (verifone_db migrations V5 + V6,
+gilbarco_db V8 + V9). One record per store-day for all Money Out tables. Fields (amounts unless noted; default
+in brackets = what the page shows when nothing was entered):
+`cash_deposit` [POS safe drops], `check_deposit` [0], `card_batch` [POS card payments], `generic_card_1`,
+`generic_card_2` [0], `ebt` [POS EBT payments], `cash_purchases` [POS paid-outs], `cash_expenses`,
+`general_account_paid` [0], `other_income` [POS pay-ins], `cust_account_sales` [POS house charges],
+`cust_account_payments`, `general_account_received` [0], `atm_trans` (count, whole number ≥ 0) [0],
+`atm_dispensed`, `atm_fee` [0]. The page shows Total deposits = cash deposit + check deposit.
 
 ## Payment gaps (G only)
 ### `GET /api/reports/payment-gaps?store&from&to`

@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 public class MoneyEntryServiceImpl implements MoneyEntryService {
 
     private static final Set<String> EDIT_ROLES = Set.of(SecurityConfig.PLATFORM_ADMIN, SecurityConfig.HOR_STAFF);
-    /** Largest amount numeric(12,2) holds, and a sane ceiling for a ticket count. */
+    /** Largest amount numeric(12,2) holds, and a sane ceiling for a count. */
     private static final BigDecimal MAX_AMOUNT = new BigDecimal("9999999999.99");
     private static final BigDecimal MAX_COUNT = new BigDecimal("1000000");
 
@@ -73,7 +73,7 @@ public class MoneyEntryServiceImpl implements MoneyEntryService {
         }
         if (field.kind() == MoneyField.Kind.COUNT) {
             if (value.signum() < 0 || value.stripTrailingZeros().scale() > 0 || value.compareTo(MAX_COUNT) > 0) {
-                throw invalid(field.key(), "Enter a whole number of tickets, 0 or more.");
+                throw invalid(field.key(), "Enter a whole number, 0 or more.");
             }
             return value.setScale(0);
         }
