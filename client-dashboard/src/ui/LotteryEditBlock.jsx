@@ -12,6 +12,7 @@ const COUNT_RE = /^\d+$/;
 export function initialDraft(rows, fields) {
   const draft = {};
   for (const r of rows) {
+    if (r.computed) continue;
     for (const key of [r.key, r.countKey].filter(Boolean)) {
       draft[key] = fields[key].edited ? String(fields[key].value ?? '') : '';
     }
@@ -59,9 +60,10 @@ function posText(field, kind) {
 }
 
 /**
- * A Daily report lottery table whose figures admin / staff can enter: one Edit button per table, one Save.
- * A value someone entered shows an "edited" mark and the POS figure in a small badge. An empty input means
- * "use the POS figure".
+ * A Daily report table (lottery, Safe Deposits) whose figures admin / staff can enter: one Edit button per
+ * table, one Save. A value someone entered shows an "edited" mark and the POS figure in a small badge. An
+ * empty input means "use the POS figure". A row with `computed: true` (e.g. Total deposits) shows `value`
+ * and is never editable.
  */
 export function LotteryEditBlock({
   title,
@@ -201,28 +203,37 @@ export function LotteryEditBlock({
       )}
       <table className="daily-report__table">
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.key} className={fields[r.key].edited ? 'lottery-edit__row--edited' : undefined}>
-              <th scope="row">
-                {r.label}
-                {fields[r.key].edited && !editing && <span className="lottery-edit__mark">edited</span>}
-              </th>
-              <td className={`daily-report__symbol daily-report__symbol--${r.tone || 'plain'}`}>{r.symbol}</td>
-              <td className="mono">{editing ? input(r.key) : view(r.key)}</td>
-              {hasCounts && (
-                <td className="daily-report__count">
-                  {r.countKey &&
-                    (editing ? (
-                      input(r.countKey)
-                    ) : fields[r.countKey].value !== null ? (
-                      <>
-                        {view(r.countKey)} {countLabel}
-                      </>
-                    ) : null)}
-                </td>
-              )}
-            </tr>
-          ))}
+          {rows.map((r) =>
+            r.computed ? (
+              <tr key={r.key} className="lottery-edit__row--computed">
+                <th scope="row">{r.label}</th>
+                <td className={`daily-report__symbol daily-report__symbol--${r.tone || 'plain'}`}>{r.symbol}</td>
+                <td className="mono">{formatCell(r.value, 'money')}</td>
+                {hasCounts && <td className="daily-report__count" />}
+              </tr>
+            ) : (
+              <tr key={r.key} className={fields[r.key].edited ? 'lottery-edit__row--edited' : undefined}>
+                <th scope="row">
+                  {r.label}
+                  {fields[r.key].edited && !editing && <span className="lottery-edit__mark">edited</span>}
+                </th>
+                <td className={`daily-report__symbol daily-report__symbol--${r.tone || 'plain'}`}>{r.symbol}</td>
+                <td className="mono">{editing ? input(r.key) : view(r.key)}</td>
+                {hasCounts && (
+                  <td className="daily-report__count">
+                    {r.countKey &&
+                      (editing ? (
+                        input(r.countKey)
+                      ) : fields[r.countKey].value !== null ? (
+                        <>
+                          {view(r.countKey)} {countLabel}
+                        </>
+                      ) : null)}
+                  </td>
+                )}
+              </tr>
+            ),
+          )}
           {editing && Object.keys(errors).length > 0 && (
             <tr>
               <td colSpan={hasCounts ? 4 : 3} className="lottery-edit__errors">

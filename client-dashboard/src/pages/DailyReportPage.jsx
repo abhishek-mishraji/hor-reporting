@@ -8,6 +8,8 @@ import {
   getDaySummary,
   getLotteryEntry,
   saveLotteryEntry,
+  getMoneyEntry,
+  saveMoneyEntry,
 } from '../api/reports.js';
 import { LotteryEditBlock } from '../ui/LotteryEditBlock.jsx';
 import { ReportStatus } from '../ui/ReportStatus.jsx';
@@ -224,6 +226,33 @@ export function moneyOut(payments, movements) {
   };
 }
 
+/** Money Out figures admin / staff may enter (keys of /api/reports/daily-money `values`). */
+export const MONEY_FIELDS = {
+  cash_deposit: 'amount',
+  check_deposit: 'amount',
+  card_batch: 'amount',
+};
+
+/**
+ * The "Safe Deposits" figures shown on the page: the entered value where admin / staff entered one, the POS
+ * value otherwise. Cash deposit = POS safe drops; check deposit is not in the POS (0); card batch = POS card
+ * payments. Each field: { pos, value, edited } (amounts as "0.00" strings).
+ * - total = Total deposits = cash deposit + check deposit
+ * - card  = credit card batch
+ * `out` is the result of moneyOut (POS figures).
+ */
+export function depositFigures(out, entered) {
+  const pos = { cash_deposit: out.deposits, check_deposit: '0.00', card_batch: out.card };
+  const values = entered || {};
+  const fields = {};
+  for (const key of Object.keys(MONEY_FIELDS)) {
+    const has = values[key] !== undefined && values[key] !== null;
+    fields[key] = { pos: pos[key], value: fromCents(toCents(has ? values[key] : pos[key])), edited: has };
+  }
+  const c = (key) => toCents(fields[key].value);
+  return { fields, total: fromCents(c('cash_deposit') + c('check_deposit')), card: fields.card_batch.value };
+}
+
 /**
  * Footer totals of one day (strings, 2 decimals).
  * - Money In  = Total Grocery + Total Gas Amt Sold + sales tax
@@ -340,7 +369,27 @@ export function DailyReportPage() {
 
   const payments = useReport((p) => getPayments(p.vendor, { store: p.store, from: p.to, to: p.to }));
   const moves = useReport((p) => getCashMovements(p.vendor, { store: p.store, from: p.to, to: p.to }));
-  const out = useMemo(() => moneyOut(payments.data, moves.data), [payments.data, moves.data]);
+  const posOut = useMemo(() => moneyOut(payments.data, moves.data), [payments.data, moves.data]);
+
+  // Safe Deposits figures entered by admin / staff (cash / check deposit, card batch).
+  const [moneyReload, setMoneyReload] = useState(0);
+  const moneyEntry = useReport((p) => getMoneyEntry(p.vendor, { store: p.store, date: p.to }), [moneyReload]);
+  const deposits = useMemo(() => depositFigures(posOut, moneyEntry.data?.values), [posOut, moneyEntry.data]);
+  const out = useMemo(() => ({ ...posOut, deposits: deposits.total, card: deposits.card }), [posOut, deposits]);
+  const saveMoney = async (values) => {
+    try {
+      await saveMoneyEntry(
+        selectedStore?.pos_vendor,
+        { store: selectedStore?.store_code, date: day },
+        { version: moneyEntry.data?.version ?? 0, values },
+      );
+    } finally {
+      setMoneyReload((n) => n + 1); // show what is stored now (also after a 409)
+    }
+  };
+  const moneyLastEdited = moneyEntry.data?.updated_by_name
+    ? `Last edited by ${moneyEntry.data.updated_by_name}, ${formatEditTime(moneyEntry.data.updated_at)}`
+    : null;
 
   const ZERO = '0.00';
 
@@ -526,25 +575,32 @@ export function DailyReportPage() {
               </h2>
               <div className="daily-report__grid">
                 <div>
-                  <SummaryBlock
+                  {moneyEntry.error && (
+                    <div className="lottery-edit__message" role="alert">
+                      Entered deposit figures could not be loaded; POS figures are shown.
+                    </div>
+                  )}
+                  <LotteryEditBlock
                     title="Safe Deposits"
-                    note={`${dayLabel} · safe drops, and all card payments (credit, debit, pump, mobile).`}
-                    symbol="− $"
-                    type="money"
+                    note={`${dayLabel} · cash deposit = safe drops; check deposit is not recorded by the register (0.00 until entered); card batch = all card payments (credit, debit, pump, mobile).`}
                     rows={[
+                      { key: 'cash_deposit', label: 'Cash deposit', symbol: '− $', tone: 'minus' },
+                      { key: 'check_deposit', label: 'Check deposit', symbol: '− $', tone: 'minus' },
                       {
-                        key: 'deposits',
+                        key: 'total_deposits',
                         label: 'Total deposits',
+                        symbol: '− $',
                         tone: 'minus',
-                        value: out.deposits,
+                        computed: true,
+                        value: deposits.total,
                       },
-                      {
-                        key: 'card',
-                        label: 'Credit card batch',
-                        tone: 'minus',
-                        value: out.card,
-                      },
+                      { key: 'card_batch', label: 'Credit card batch', symbol: '− $', tone: 'minus' },
                     ]}
+                    fields={deposits.fields}
+                    kinds={MONEY_FIELDS}
+                    canEdit={Boolean(moneyEntry.data?.can_edit)}
+                    onSave={saveMoney}
+                    lastEdited={moneyLastEdited}
                   />
                   <SummaryBlock
                     title="Credit Card 2 (Credited in Bank)"

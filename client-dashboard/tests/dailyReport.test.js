@@ -7,6 +7,7 @@ import {
   moneyOut,
   paymentBucket,
   dailyTotals,
+  depositFigures,
   overShortTone,
 } from '../src/pages/DailyReportPage.jsx';
 import { sumCents, fromCents, sumMilli, fromMilli } from '../src/num.js';
@@ -173,6 +174,37 @@ describe('dailyTotals', () => {
       out: { deposits: '100.00', card: '0.00', ebt: '0.00', house: '5.00', paidOuts: '20.00', payIns: '10.25' },
     });
     expect(t).toEqual({ moneyIn: '852.00', moneyOut: '1177.75', overShort: '325.75' });
+  });
+});
+
+describe('depositFigures', () => {
+  const pos = { deposits: '4457.00', card: '5838.74', ebt: '33.94', house: '0.00', paidOuts: '0.00', payIns: '0.00' };
+
+  it('uses the POS figures when nothing was entered: cash = safe drops, check = 0', () => {
+    const d = depositFigures(pos, {});
+    expect(d.total).toBe('4457.00');
+    expect(d.card).toBe('5838.74');
+    expect(d.fields.cash_deposit).toEqual({ pos: '4457.00', value: '4457.00', edited: false });
+    expect(d.fields.check_deposit).toEqual({ pos: '0.00', value: '0.00', edited: false });
+  });
+
+  it('Total deposits = cash deposit + check deposit, entered values win, and flow into Money Out', () => {
+    const d = depositFigures(pos, { check_deposit: 120.5, card_batch: '5800.00', cash_deposit: null });
+    expect(d.total).toBe('4577.50');
+    expect(d.card).toBe('5800.00');
+    expect(d.fields.check_deposit.edited).toBe(true);
+    expect(d.fields.cash_deposit.edited).toBe(false);
+
+    const lotto = lotteryReport([]);
+    const t = dailyTotals({
+      lottery: lotteryFigures(lotto, {}),
+      merch: [],
+      grades: [],
+      tax: null,
+      out: { ...pos, deposits: d.total, card: d.card },
+    });
+    // 4577.50 + 5800.00 + 33.94
+    expect(t.moneyOut).toBe('10411.44');
   });
 });
 

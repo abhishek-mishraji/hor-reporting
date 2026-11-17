@@ -34,7 +34,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/reporting/status", "/error").permitAll()
                         // lottery figures: everyone who sees the store reads them, only admin and staff save them
-                        .requestMatchers(HttpMethod.PUT, "/api/reports/daily-lottery").hasAnyAuthority(PLATFORM_ADMIN, HOR_STAFF)
+                        .requestMatchers(HttpMethod.PUT, "/api/reports/daily-lottery", "/api/reports/daily-money").hasAnyAuthority(PLATFORM_ADMIN, HOR_STAFF)
                         .requestMatchers("/api/reports/**", "/api/reporting/**", "/api/v1/**", "/api/events/**")
                         .hasAnyAuthority(PLATFORM_ADMIN, HOR_STAFF, CLIENT_USER)
                         .anyRequest().denyAll())

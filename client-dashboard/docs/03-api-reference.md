@@ -225,6 +225,14 @@ VALIDATION_FAILED` with `errors[{field, message}]` for an unknown field, more th
 fractional ticket count, or a missing `version`. Saving values that are already stored changes nothing (version
 stays). Every changed field adds one history row (old value, new value, who, when).
 
+## Money Out figures entered by admin / staff (Daily report "Safe Deposits")
+### `GET /api/reports/daily-money?store&date` (V, G) — every role that may see the store
+### `PUT /api/reports/daily-money?store&date` (V, G) — `PLATFORM_ADMIN`, `HOR_STAFF` only (`CLIENT_USER`: 403)
+Exactly the same contract (answer, PUT body, 409 / 400 errors, history) as `daily-lottery`, kept in sync by the
+same script. Stored in `report.money_day_entry` + `report.money_day_entry_change` (verifone_db migration V5,
+gilbarco_db V8). Fields, all amounts: `cash_deposit` (POS default: safe drops), `check_deposit` (not in the POS:
+0), `card_batch` (POS default: card payments). The page shows Total deposits = cash deposit + check deposit.
+
 ## Payment gaps (G only)
 ### `GET /api/reports/payment-gaps?store&from&to`
 Counted transactions whose payments differ from lines + tax: `store_id, store_code, business_date, file_id,

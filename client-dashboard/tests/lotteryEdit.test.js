@@ -21,6 +21,21 @@ describe('initialDraft', () => {
   });
 });
 
+describe('initialDraft with a calculated row', () => {
+  it('leaves the computed row (Total deposits) out of the draft', () => {
+    const f = {
+      cash_deposit: { pos: '4457.00', value: '4457.00', edited: false },
+      check_deposit: { pos: '0.00', value: '120.00', edited: true },
+    };
+    const r = [
+      { key: 'cash_deposit' },
+      { key: 'check_deposit' },
+      { key: 'total_deposits', computed: true, value: '4577.00' },
+    ];
+    expect(initialDraft(r, f)).toEqual({ cash_deposit: '', check_deposit: '120.00' });
+  });
+});
+
 describe('draftChanges', () => {
   it('sends only real changes; empty = back to the POS figure', () => {
     const { values, errors } = draftChanges(

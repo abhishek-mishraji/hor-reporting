@@ -2104,6 +2104,12 @@ a:hover {
   background-color: var(--bg-subtle);
   border-bottom: none;
 }
+/* A calculated row inside an editable table (e.g. Total deposits = cash + check). */
+.daily-report__table .lottery-edit__row--computed th,
+.daily-report__table .lottery-edit__row--computed td {
+  font-weight: 700;
+  background-color: var(--bg-subtle);
+}
 
 .daily-report__table .daily-report__symbol--plus {
   color: var(--success);

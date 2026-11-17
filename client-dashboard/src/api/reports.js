@@ -168,6 +168,32 @@ export async function saveLotteryEntry(vendor, params, body) {
 }
 
 /**
+ * Money Out figures entered by admin / staff for one store-day (Daily report "Safe Deposits":
+ * cash_deposit, check_deposit, card_batch). Same answer shape as getLotteryEntry.
+ * @param {'VERIFONE'|'GILBARCO'} vendor
+ * @param {{ store: string, date: string }} params
+ */
+export async function getMoneyEntry(vendor, params) {
+  const prefix = getServicePrefix(vendor);
+  return requestWithMeta(`${prefix}/api/reports/daily-money${toQueryString(params)}`);
+}
+
+/**
+ * Saves Money Out figures (admin / staff only). `values`: field -> number, or null to go back to the POS figure.
+ * 409 VERSION_CONFLICT when someone saved the same day after `version` was loaded.
+ * @param {'VERIFONE'|'GILBARCO'} vendor
+ * @param {{ store: string, date: string }} params
+ * @param {{ version: number, values: Record<string, number|null> }} body
+ */
+export async function saveMoneyEntry(vendor, params, body) {
+  const prefix = getServicePrefix(vendor);
+  return requestWithMeta(`${prefix}/api/reports/daily-money${toQueryString(params)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
  * Cash movements report.
  * @param {'VERIFONE'|'GILBARCO'} vendor
  * @param {{ store: string, from: string, to: string, kind?: string }} params
