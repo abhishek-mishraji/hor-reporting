@@ -11,11 +11,13 @@ import {
   CashIcon,
   ShieldAlertIcon,
   TicketIcon,
+  ClipboardIcon,
   LogOutIcon,
 } from './Icons.jsx';
 
 const NAV_ITEMS = [
   { path: '/day-summary', label: 'Day summary', icon: <GridIcon size={18} /> },
+  { path: '/daily-report', label: 'Daily report', icon: <ClipboardIcon size={18} /> },
   { path: '/items', label: 'Items', icon: <TagIcon size={18} /> },
   { path: '/departments', label: 'Departments', icon: <LayersIcon size={18} /> },
   { path: '/monthly', label: 'Monthly', icon: <CalendarIcon size={18} /> },

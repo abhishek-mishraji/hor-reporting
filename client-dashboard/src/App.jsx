@@ -11,6 +11,7 @@ import { FuelPage } from './pages/FuelPage.jsx';
 import { CashPage } from './pages/CashPage.jsx';
 import { SuspiciousPage } from './pages/SuspiciousPage.jsx';
 import { LotteryPage } from './pages/LotteryPage.jsx';
+import { DailyReportPage } from './pages/DailyReportPage.jsx';
 import { RefreshIcon } from './ui/Icons.jsx';
 import horLogo from './assets/hor-logo.png';
 
@@ -65,6 +66,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/day-summary" replace />} />
         <Route path="/day-summary" element={<DaySummaryPage />} />
+        <Route path="/daily-report" element={<DailyReportPage />} />
         <Route path="/items" element={<ItemsPage />} />
         <Route path="/departments" element={<DepartmentsPage />} />
         <Route path="/monthly" element={<MonthlyPage />} />

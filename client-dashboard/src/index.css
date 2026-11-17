@@ -2054,3 +2054,53 @@ a:hover {
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Daily report (Merchandise Sales): department name | dollar value
+   ========================================================================== */
+.daily-report__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 0 1.5rem;
+  align-items: start;
+  max-width: 1080px;
+}
+
+.daily-report__table .daily-report__symbol {
+  width: 2.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.daily-report__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.daily-report__table th,
+.daily-report__table td {
+  padding: 0.6rem 1.35rem;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.875rem;
+}
+
+.daily-report__table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.daily-report__table td {
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text-main);
+}
+
+.daily-report__table tfoot th,
+.daily-report__table tfoot td {
+  font-weight: 700;
+  background-color: var(--bg-subtle);
+  border-bottom: none;
+}
