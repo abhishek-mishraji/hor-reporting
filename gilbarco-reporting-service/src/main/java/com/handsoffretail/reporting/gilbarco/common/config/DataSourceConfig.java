@@ -20,6 +20,10 @@ public class DataSourceConfig {
     }
 
     private HikariDataSource createDataSource(String poolName, String dbName) {
+        return createDataSource(poolName, dbName, true, 0);
+    }
+
+    private HikariDataSource createDataSource(String poolName, String dbName, boolean readOnly, int fixedPoolSize) {
         HikariConfig config = new HikariConfig();
         String host = properties.db() != null && properties.db().host() != null ? properties.db().host() : "localhost";
         int port = properties.db() != null && properties.db().port() > 0 ? properties.db().port() : 5432;
@@ -31,15 +35,15 @@ public class DataSourceConfig {
         config.setUsername(user);
         config.setPassword(password);
         config.setPoolName(poolName);
-        config.setReadOnly(true);
+        config.setReadOnly(readOnly);
 
         int maxPool = properties.hikari() != null && properties.hikari().maximumPoolSize() > 0 ? properties.hikari().maximumPoolSize() : 10;
         int minIdle = properties.hikari() != null && properties.hikari().minimumIdle() > 0 ? properties.hikari().minimumIdle() : 2;
         long idleTimeout = properties.hikari() != null && properties.hikari().idleTimeout() > 0 ? properties.hikari().idleTimeout() : 300000;
         long connTimeout = properties.hikari() != null && properties.hikari().connectionTimeout() > 0 ? properties.hikari().connectionTimeout() : 20000;
 
-        config.setMaximumPoolSize(maxPool);
-        config.setMinimumIdle(minIdle);
+        config.setMaximumPoolSize(fixedPoolSize > 0 ? fixedPoolSize : maxPool);
+        config.setMinimumIdle(fixedPoolSize > 0 ? 0 : minIdle);
         config.setIdleTimeout(idleTimeout);
         config.setConnectionTimeout(connTimeout);
         return new HikariDataSource(config);
@@ -65,6 +69,17 @@ public class DataSourceConfig {
     public DataSource gilbarcoDataSource() {
         String dbName = properties.gilbarcoDb() != null && properties.gilbarcoDb().name() != null ? properties.gilbarcoDb().name() : "gilbarco_db";
         return createDataSource("gilbarco-db-pool", dbName);
+    }
+
+    /**
+     * The only writable pool: used by the lottery figures admin and staff enter (report.lottery_day_entry).
+     * Every report keeps reading through the read-only pool above.
+     */
+    @Bean
+    @Qualifier("gilbarcoWriteDataSource")
+    public DataSource gilbarcoWriteDataSource() {
+        String dbName = properties.gilbarcoDb() != null && properties.gilbarcoDb().name() != null ? properties.gilbarcoDb().name() : "gilbarco_db";
+        return createDataSource("gilbarco-db-write-pool", dbName, false, 2);
     }
 
     @Bean

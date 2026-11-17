@@ -2220,3 +2220,80 @@ a:hover {
     gap: 0.15rem;
   }
 }
+
+/* Lottery figures entered by admin / staff (Daily report) */
+.lottery-edit__badge {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  vertical-align: middle;
+  color: #fff;
+  background-color: #1d6fb8;
+  white-space: nowrap;
+}
+
+.lottery-edit__mark {
+  margin-left: 0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.lottery-edit__last {
+  font-style: italic;
+}
+
+.lottery-edit__field {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.lottery-edit__input {
+  width: 7.5rem;
+  max-width: 100%;
+  text-align: right;
+  padding: 0.3rem 0.5rem;
+}
+
+.daily-report__count .lottery-edit__input {
+  width: 4.5rem;
+}
+
+.lottery-edit__input--error {
+  border-color: var(--danger) !important;
+}
+
+.lottery-edit__reset {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lottery-edit__reset:hover:not(:disabled) {
+  color: var(--text-main);
+}
+
+.lottery-edit__errors {
+  color: var(--danger);
+  font-size: 0.75rem;
+  text-align: left !important;
+}
+
+.lottery-edit__message {
+  margin: 0.75rem 1.35rem 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  color: var(--danger);
+  background-color: var(--danger-bg);
+}

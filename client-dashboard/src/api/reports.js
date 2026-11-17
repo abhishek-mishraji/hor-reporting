@@ -142,6 +142,32 @@ export async function getPayments(vendor, params) {
 }
 
 /**
+ * Lottery figures entered by admin / staff for one store-day (Daily report).
+ * Answer: { store_code, business_date, can_edit, version, values: {field: number}, updated_by_name, updated_at }.
+ * @param {'VERIFONE'|'GILBARCO'} vendor
+ * @param {{ store: string, date: string }} params
+ */
+export async function getLotteryEntry(vendor, params) {
+  const prefix = getServicePrefix(vendor);
+  return requestWithMeta(`${prefix}/api/reports/daily-lottery${toQueryString(params)}`);
+}
+
+/**
+ * Saves lottery figures (admin / staff only). `values`: field -> number, or null to go back to the POS figure.
+ * 409 VERSION_CONFLICT when someone saved the same day after `version` was loaded.
+ * @param {'VERIFONE'|'GILBARCO'} vendor
+ * @param {{ store: string, date: string }} params
+ * @param {{ version: number, values: Record<string, number|null> }} body
+ */
+export async function saveLotteryEntry(vendor, params, body) {
+  const prefix = getServicePrefix(vendor);
+  return requestWithMeta(`${prefix}/api/reports/daily-lottery${toQueryString(params)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
  * Cash movements report.
  * @param {'VERIFONE'|'GILBARCO'} vendor
  * @param {{ store: string, from: string, to: string, kind?: string }} params

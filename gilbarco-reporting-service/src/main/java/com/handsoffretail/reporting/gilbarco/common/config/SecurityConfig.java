@@ -6,6 +6,7 @@ import com.handsoffretail.auth.client.ProblemResponses;
 import com.handsoffretail.auth.client.RequestLoggingFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -32,6 +33,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/reporting/status", "/error").permitAll()
+                        // lottery figures: everyone who sees the store reads them, only admin and staff save them
+                        .requestMatchers(HttpMethod.PUT, "/api/reports/daily-lottery").hasAnyAuthority(PLATFORM_ADMIN, HOR_STAFF)
                         .requestMatchers("/api/reports/**", "/api/reporting/**", "/api/v1/**", "/api/events/**")
                         .hasAnyAuthority(PLATFORM_ADMIN, HOR_STAFF, CLIENT_USER)
                         .anyRequest().denyAll())

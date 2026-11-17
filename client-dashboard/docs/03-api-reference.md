@@ -201,6 +201,30 @@ One row per day:
 ### `GET /api/reports/lottery-payouts?store&from&to` (V, G)
 `store_id, store_code, business_date, payouts, payout_amount` (positive).
 
+## Lottery figures entered by admin / staff (Daily report)
+### `GET /api/reports/daily-lottery?store&date` (V, G) — every role that may see the store
+### `PUT /api/reports/daily-lottery?store&date` (V, G) — `PLATFORM_ADMIN`, `HOR_STAFF` only (`CLIENT_USER`: 403)
+Same contract and same code in both services (`scripts/check-lottery-sync.sh` fails when they drift). Stored in
+`report.lottery_day_entry` + `report.lottery_day_entry_change` (history) of the vendor database (verifone_db
+migration V4, gilbarco_db V7, run by the ingestion services). The POS figures are **not** in this answer: the page
+takes them from `departments` and lets an entered value replace them field by field.
+
+Fields (amount = dollars, 2 decimals, may be negative; count = whole number ≥ 0):
+`lottery_sales`, `lottery_tickets` (register without scratch-off / online split), `scratch_sales`, `scratch_tickets`,
+`online_sales`, `online_tickets`, `online_cashes`, `scratch_cashes`, `cashes_tickets`, `settlement`, `adjustment`,
+`online_credit`, `scratch_credit`, `commission`.
+
+GET answer: `{store_code, business_date, can_edit, version, values: {field: number}, updated_by_name, updated_at}`.
+`values` holds only the entered fields (a missing field uses the POS figure); `version` is 0 and
+`updated_by_name` / `updated_at` are missing when nothing was entered. `updated_at` is an ISO time with offset.
+
+PUT body: `{"version": <version loaded>, "values": {"commission": 45.60, "settlement": null}}`. Only the listed
+fields change; `null` = back to the POS figure. Answer = the GET answer after the save. Errors:
+`409 VERSION_CONFLICT` (+ `current_version`) when someone saved the day after it was loaded; `400
+VALIDATION_FAILED` with `errors[{field, message}]` for an unknown field, more than 2 decimals, a negative or
+fractional ticket count, or a missing `version`. Saving values that are already stored changes nothing (version
+stays). Every changed field adds one history row (old value, new value, who, when).
+
 ## Payment gaps (G only)
 ### `GET /api/reports/payment-gaps?store&from&to`
 Counted transactions whose payments differ from lines + tax: `store_id, store_code, business_date, file_id,

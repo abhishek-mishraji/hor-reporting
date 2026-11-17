@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { merchandiseRows, fuelRows, lotteryReport, moneyOut, paymentBucket, dailyTotals, overShortTone } from '../src/pages/DailyReportPage.jsx';
+import {
+  merchandiseRows,
+  fuelRows,
+  lotteryReport,
+  lotteryFigures,
+  moneyOut,
+  paymentBucket,
+  dailyTotals,
+  overShortTone,
+} from '../src/pages/DailyReportPage.jsx';
 import { sumCents, fromCents, sumMilli, fromMilli } from '../src/num.js';
 
 const row = (dept_number, dept_name, sales_class, net_sales) => ({ dept_number, dept_name, sales_class, net_sales });
@@ -43,8 +52,13 @@ describe('fuelRows', () => {
   });
 });
 
-const lot = (dept_number, dept_name, sales_class, units_sold, net_sales) =>
-  ({ dept_number, dept_name, sales_class, units_sold, net_sales });
+const lot = (dept_number, dept_name, sales_class, units_sold, net_sales) => ({
+  dept_number,
+  dept_name,
+  sales_class,
+  units_sold,
+  net_sales,
+});
 
 describe('lotteryReport', () => {
   it('splits scratch-off / online when the register has both departments (Gilbarco 800, 2026-10-24)', () => {
@@ -58,7 +72,6 @@ describe('lotteryReport', () => {
     expect(r.scratch).toMatchObject({ amount: '655.00', tickets: 257 });
     expect(r.online).toMatchObject({ amount: '760.00', tickets: 47 });
     expect(r.cashes).toMatchObject({ amount: '934.00', tickets: 43 });
-    expect(r.balance).toBe('-174.00');
   });
 
   it('uses one combined sales figure when the register has a single Lotto department (Verifone 8730, 2026-10-15)', () => {
@@ -69,14 +82,12 @@ describe('lotteryReport', () => {
     expect(r.split).toBe(false);
     expect(r.combined).toMatchObject({ amount: '852.00', tickets: 51 });
     expect(r.cashes).toMatchObject({ amount: '1063.00', tickets: 20 });
-    expect(r.balance).toBe('-211.00');
   });
 
   it('shows 0.00 with no ticket count when there was no lottery', () => {
     const r = lotteryReport([]);
     expect(r.combined).toEqual({ amount: '0.00', cents: 0, tickets: null });
     expect(r.cashes.amount).toBe('0.00');
-    expect(r.balance).toBe('0.00');
   });
 });
 
@@ -116,7 +127,10 @@ describe('moneyOut', () => {
         { payment_type: 'HOUSE', net_amount: '71.09' },
         { payment_type: 'COUPON', net_amount: '9.45' },
       ],
-      [{ kind: 'payout', amount: '25.00' }, { kind: 'pay_in', amount: '10.25' }]
+      [
+        { kind: 'payout', amount: '25.00' },
+        { kind: 'pay_in', amount: '10.25' },
+      ],
     );
     expect(r).toMatchObject({ card: '40.00', house: '71.09', paidOuts: '25.00', payIns: '10.25' });
     expect(paymentBucket({ payment_type: 'COUPON' })).toBeNull();
@@ -137,9 +151,9 @@ describe('dailyTotals', () => {
       lot(6, 'LOTTO PAID OUT', 'lottery_payout', '43.000', '-934.00'),
     ]);
     const t = dailyTotals({
+      lottery: lotteryFigures(lotto, {}),
       merch: [{ amount: '3347.11' }],
       grades: [{ amount: '6523.64' }],
-      lotto,
       tax: '201.04',
       out: { deposits: '4457.00', card: '5838.74', ebt: '33.94', house: '0.00', paidOuts: '0.00', payIns: '0.00' },
     });
@@ -152,9 +166,9 @@ describe('dailyTotals', () => {
       lot(28, 'Lotto Payout', 'lottery_payout', '-20.000', '-1063.00'),
     ]);
     const t = dailyTotals({
+      lottery: lotteryFigures(lotto, {}),
       merch: [],
       grades: [],
-      lotto,
       tax: null,
       out: { deposits: '100.00', card: '0.00', ebt: '0.00', house: '5.00', paidOuts: '20.00', payIns: '10.25' },
     });
@@ -167,5 +181,62 @@ describe('overShortTone', () => {
     expect(overShortTone('-223.11')).toBe('out');
     expect(overShortTone('325.75')).toBe('in');
     expect(overShortTone('0.00')).toBe('zero');
+  });
+});
+
+describe('lotteryFigures', () => {
+  const gilbarco = () =>
+    lotteryReport([
+      lot(5, 'LOTTO SCRATCH OFF', 'lottery_sale', '257.000', '655.00'),
+      lot(57, 'LOTTO ONLINE', 'lottery_sale', '47.000', '760.00'),
+      lot(6, 'LOTTO PAID OUT', 'lottery_payout', '43.000', '-934.00'),
+    ]);
+
+  it('uses the POS figures (0 for rows the POS lacks) when nothing was entered', () => {
+    const f = lotteryFigures(gilbarco(), {});
+    expect(f.fields.scratch_sales).toEqual({ pos: '655.00', value: '655.00', edited: false });
+    expect(f.fields.scratch_tickets).toEqual({ pos: 257, value: 257, edited: false });
+    expect(f.fields.scratch_cashes.value).toBe('934.00');
+    expect(f.fields.commission).toEqual({ pos: '0.00', value: '0.00', edited: false });
+    expect(f.balance).toBe('-174.00');
+    expect(f.moneyInCents).toBe(141500);
+    expect(f.moneyOutCents).toBe(93400);
+  });
+
+  it('applies entered figures: paper report of 2026-10-24 (commission 45.60 -> balance -219.60)', () => {
+    const f = lotteryFigures(gilbarco(), { commission: 45.6, scratch_tickets: 260 });
+    expect(f.fields.commission).toEqual({ pos: '0.00', value: '45.60', edited: true });
+    expect(f.fields.scratch_tickets).toEqual({ pos: 257, value: 260, edited: true });
+    expect(f.balance).toBe('-219.60');
+  });
+
+  it('balance adds settlement and subtracts adjustment, credits and commission; totals follow the chosen sides', () => {
+    const f = lotteryFigures(gilbarco(), {
+      online_cashes: 10,
+      settlement: 100,
+      adjustment: 5,
+      online_credit: 2,
+      scratch_credit: 3,
+      commission: 45.6,
+    });
+    // 760 - 10 - 934 + 100 - 5 - 2 - 3 - 45.60
+    expect(f.balance).toBe('-139.60');
+    // In: 655 + 760 + 100 + 45.60 ; Out: 10 + 934 + 5 + 2 + 3
+    expect(f.moneyInCents).toBe(156060);
+    expect(f.moneyOutCents).toBe(95400);
+  });
+
+  it('uses the combined lottery sales when the register has no split (Verifone)', () => {
+    const f = lotteryFigures(
+      lotteryReport([
+        lot(29, 'Lotto', 'lottery_sale', '51.000', '852.00'),
+        lot(28, 'Lotto Payout', 'lottery_payout', '-20.000', '-1063.00'),
+      ]),
+      { lottery_sales: 900 },
+    );
+    expect(f.fields.lottery_sales).toEqual({ pos: '852.00', value: '900.00', edited: true });
+    expect(f.fields.scratch_sales.pos).toBeNull();
+    expect(f.balance).toBe('-163.00');
+    expect(f.moneyInCents).toBe(90000);
   });
 });

@@ -1,6 +1,15 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../session/SessionContext.jsx';
-import { getDepartments, getFuel, getPayments, getCashMovements, getDaySummary } from '../api/reports.js';
+import {
+  getDepartments,
+  getFuel,
+  getPayments,
+  getCashMovements,
+  getDaySummary,
+  getLotteryEntry,
+  saveLotteryEntry,
+} from '../api/reports.js';
+import { LotteryEditBlock } from '../ui/LotteryEditBlock.jsx';
 import { ReportStatus } from '../ui/ReportStatus.jsx';
 import { useReport } from '../ui/useReport.js';
 import { CalendarIcon } from '../ui/Icons.jsx';
@@ -58,8 +67,8 @@ function lotteryKind(name) {
  *   (Verifone 8730: one "Lotto" department).
  * - Cashes = all winnings paid at the register (payout departments, made positive); the POS can't split
  *   them, so they are shown as scratch-off cashes and online cashes stay 0.
- * - Balance = sales part (online sales; combined sales when not split) − cashes. The other reading rows
- *   (settlement, adjustment, credits, commission) are not in the POS and are 0.
+ * - The other reading rows (settlement, adjustment, credits, commission) are not in the POS; admin / staff
+ *   enter them (lotteryFigures applies the entered values and works out the Balance).
  * Amounts are strings with 2 decimals; tickets are units sold (null when there is no department).
  */
 export function lotteryReport(rows) {
@@ -88,14 +97,86 @@ export function lotteryReport(rows) {
     amount: fromCents(-paid.cents),
   };
 
-  const balanceCents = (split ? online.cents : combined.cents) - cashes.cents;
   return {
     split,
     scratch,
     online,
     combined,
     cashes,
+  };
+}
+
+/** Lottery figures admin / staff may enter (keys of /api/reports/daily-lottery `values`). */
+export const LOTTERY_FIELDS = {
+  lottery_sales: 'amount',
+  lottery_tickets: 'count',
+  scratch_sales: 'amount',
+  scratch_tickets: 'count',
+  online_sales: 'amount',
+  online_tickets: 'count',
+  online_cashes: 'amount',
+  scratch_cashes: 'amount',
+  cashes_tickets: 'count',
+  settlement: 'amount',
+  adjustment: 'amount',
+  online_credit: 'amount',
+  scratch_credit: 'amount',
+  commission: 'amount',
+};
+
+/**
+ * The lottery figures shown on the page: the entered value where admin / staff entered one, the POS value
+ * otherwise (rows the POS does not record are 0). Each field: { pos, value, edited } with amounts as
+ * "0.00" strings and counts as numbers (null = no count).
+ * - Balance = sales − online cashes − scratch-off cashes + settlement − adjustment − online credit
+ *   − scratch-off credit − commission; sales = online sales, or the combined lottery sales when the register
+ *   does not split scratch-off / online.
+ * - moneyInCents  = lottery sales (scratch-off + online, or combined) + settlement + commission
+ * - moneyOutCents = online cashes + scratch-off cashes + adjustment + online credit + scratch-off credit
+ */
+export function lotteryFigures(lotto, entered) {
+  const pos = {
+    lottery_sales: lotto.split ? null : lotto.combined.amount,
+    lottery_tickets: lotto.split ? null : lotto.combined.tickets,
+    scratch_sales: lotto.split ? lotto.scratch.amount : null,
+    scratch_tickets: lotto.split ? lotto.scratch.tickets : null,
+    online_sales: lotto.split ? lotto.online.amount : null,
+    online_tickets: lotto.split ? lotto.online.tickets : null,
+    online_cashes: '0.00',
+    scratch_cashes: lotto.cashes.amount,
+    cashes_tickets: lotto.cashes.tickets,
+    settlement: '0.00',
+    adjustment: '0.00',
+    online_credit: '0.00',
+    scratch_credit: '0.00',
+    commission: '0.00',
+  };
+  const values = entered || {};
+  const fields = {};
+  for (const [key, kind] of Object.entries(LOTTERY_FIELDS)) {
+    const has = values[key] !== undefined && values[key] !== null;
+    const raw = has ? values[key] : pos[key];
+    const value = kind === 'count' ? (raw === null || raw === undefined ? null : Number(raw)) : fromCents(toCents(raw));
+    fields[key] = { pos: pos[key], value, edited: has };
+  }
+  const c = (key) => toCents(fields[key].value);
+  const salesCents = lotto.split ? c('scratch_sales') + c('online_sales') : c('lottery_sales');
+  const balanceCents =
+    (lotto.split ? c('online_sales') : c('lottery_sales')) -
+    c('online_cashes') -
+    c('scratch_cashes') +
+    c('settlement') -
+    c('adjustment') -
+    c('online_credit') -
+    c('scratch_credit') -
+    c('commission');
+  return {
+    split: lotto.split,
+    fields,
     balance: fromCents(balanceCents),
+    moneyInCents: salesCents + c('settlement') + c('commission'),
+    moneyOutCents:
+      c('online_cashes') + c('scratch_cashes') + c('adjustment') + c('online_credit') + c('scratch_credit'),
   };
 }
 
@@ -145,20 +226,34 @@ export function moneyOut(payments, movements) {
 
 /**
  * Footer totals of one day (strings, 2 decimals).
- * - Money In  = Total Grocery + Total Gas Amt Sold + lottery sales + sales tax.
+ * - Money In  = Total Grocery + Total Gas Amt Sold + sales tax
+ *   + lottery (sales + settlement + commission, see lotteryFigures).
  * - Money Out = following the signs of the paper report: every "− $" row added, every "+ $" row subtracted:
  *   deposits + card batch + EBT + cash purchases (paid-outs) + customer account sales (house)
- *   + lottery cashes (winnings paid, shown in the lottery reading) − other income
- *   (pay-ins). Rows the POS does not have are 0 and change nothing.
+ *   + lottery (cashes + adjustment + credits) − other income (pay-ins).
+ *   Rows the POS does not have are 0 and change nothing until admin / staff enter them.
+ * `lottery` is the result of lotteryFigures (entered values already applied).
  */
-export function dailyTotals({ merch, grades, lotto, tax, out }) {
-  const lottoSales = lotto.split ? lotto.scratch.cents + lotto.online.cents : lotto.combined.cents;
-  const moneyIn =
-    sumCents(merch, 'amount') + sumCents(grades, 'amount') + lottoSales + toCents(tax);
+export function dailyTotals({ merch, grades, lottery, tax, out }) {
+  const moneyIn = sumCents(merch, 'amount') + sumCents(grades, 'amount') + lottery.moneyInCents + toCents(tax);
   const c = (k) => toCents(out[k]);
-  const moneyOut = c('deposits') + c('card') + c('ebt') + c('paidOuts') + c('house') + lotto.cashes.cents - c('payIns');
+  const moneyOut =
+    c('deposits') + c('card') + c('ebt') + c('paidOuts') + c('house') + lottery.moneyOutCents - c('payIns');
   // Over/Short = Total Money Out − Total Money In (negative = short, positive = over).
   return { moneyIn: fromCents(moneyIn), moneyOut: fromCents(moneyOut), overShort: fromCents(moneyOut - moneyIn) };
+}
+
+/** "2026-11-17T09:30:00Z" -> "Nov 17, 2026, 3:00 PM" in the viewer's own clock (when the edit was saved). */
+export function formatEditTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 /** Colour of the Over/Short figure: red when short (negative), green when over (positive). */
@@ -248,83 +343,48 @@ export function DailyReportPage() {
   const out = useMemo(() => moneyOut(payments.data, moves.data), [payments.data, moves.data]);
 
   const ZERO = '0.00';
-  const ticketsSoldRows = lotto.split
-    ? [
-        {
-          key: 'scratch',
-          label: 'Scratch-off sales',
-          symbol: '+ $',
-          tone: 'plus',
-          value: lotto.scratch.amount,
-          count: lotto.scratch.tickets,
-        },
-      ]
-    : [
-        {
-          key: 'sales',
-          label: 'Lottery sales',
-          symbol: '+ $',
-          tone: 'plus',
-          value: lotto.combined.amount,
-          count: lotto.combined.tickets,
-        },
-      ];
+
+  // Lottery figures entered by admin / staff (they replace the POS figure field by field).
+  const [entryReload, setEntryReload] = useState(0);
+  const entry = useReport((p) => getLotteryEntry(p.vendor, { store: p.store, date: p.to }), [entryReload]);
+  const lottery = useMemo(() => lotteryFigures(lotto, entry.data?.values), [lotto, entry.data]);
+  const canEditLottery = Boolean(entry.data?.can_edit);
+
+  const saveLottery = async (values) => {
+    try {
+      await saveLotteryEntry(
+        selectedStore?.pos_vendor,
+        { store: selectedStore?.store_code, date: day },
+        { version: entry.data?.version ?? 0, values },
+      );
+    } finally {
+      setEntryReload((n) => n + 1); // show what is stored now (also after a 409)
+    }
+  };
+
+  const lastEdited = entry.data?.updated_by_name
+    ? `Last edited by ${entry.data.updated_by_name}, ${formatEditTime(entry.data.updated_at)}`
+    : null;
+
+  const ticketsSoldRows = lottery.split
+    ? [{ key: 'scratch_sales', countKey: 'scratch_tickets', label: 'Scratch-off sales', symbol: '+ $', tone: 'plus' }]
+    : [{ key: 'lottery_sales', countKey: 'lottery_tickets', label: 'Lottery sales', symbol: '+ $', tone: 'plus' }];
   const readingRows = [
-    ...(lotto.split
-      ? [
-          {
-            key: 'online',
-            label: 'Net online sales',
-            symbol: '+ $',
-            tone: 'plus',
-            value: lotto.online.amount,
-            count: lotto.online.tickets,
-          },
-        ]
+    ...(lottery.split
+      ? [{ key: 'online_sales', countKey: 'online_tickets', label: 'Net online sales', symbol: '+ $', tone: 'plus' }]
       : []),
-    {
-      key: 'onlineCashes',
-      label: 'Net online cashes',
-      symbol: '− $',
-      tone: 'minus',
-      value: ZERO,
-    },
-    {
-      key: 'scratchCashes',
-      label: 'Scratch-off cashes',
-      symbol: '− $',
-      tone: 'minus',
-      value: lotto.cashes.amount,
-      count: lotto.cashes.tickets,
-    },
-    { key: 'settlement', label: 'Settlement', symbol: '$', value: ZERO },
-    {
-      key: 'adjustment',
-      label: 'Adjustment',
-      symbol: '− $',
-      tone: 'minus',
-      value: ZERO,
-    },
-    {
-      key: 'onlineCredit',
-      label: 'Online credit',
-      symbol: '− $',
-      tone: 'minus',
-      value: ZERO,
-    },
-    {
-      key: 'scratchCredit',
-      label: 'Scratch-off credit',
-      symbol: '− $',
-      tone: 'minus',
-      value: ZERO,
-    },
-    { key: 'commission', label: 'Commission', symbol: '$', value: ZERO },
+    { key: 'online_cashes', label: 'Net online cashes', symbol: '− $', tone: 'minus' },
+    { key: 'scratch_cashes', countKey: 'cashes_tickets', label: 'Scratch-off cashes', symbol: '− $', tone: 'minus' },
+    { key: 'settlement', label: 'Settlement', symbol: '$' },
+    { key: 'adjustment', label: 'Adjustment', symbol: '− $', tone: 'minus' },
+    { key: 'online_credit', label: 'Online credit', symbol: '− $', tone: 'minus' },
+    { key: 'scratch_credit', label: 'Scratch-off credit', symbol: '− $', tone: 'minus' },
+    { key: 'commission', label: 'Commission', symbol: '$' },
   ];
 
   const summary = useReport((p) => getDaySummary(p.vendor, { store: p.store, from: p.to, to: p.to }));
   const tax = summary.data?.[0]?.tax ?? null;
-  const totals = useMemo(() => dailyTotals({ merch, grades, lotto, tax, out }), [merch, grades, lotto, tax, out]);
+  const totals = useMemo(() => dailyTotals({ merch, grades, lottery, tax, out }), [merch, grades, lottery, tax, out]);
 
   const loading = depts.loading || fuel.loading || payments.loading || moves.loading || summary.loading;
   const loadError = depts.error || fuel.error || payments.error || moves.error || summary.error;
@@ -412,27 +472,36 @@ export function DailyReportPage() {
 
                 {depts.data && (
                   <div>
-                    <SummaryBlock
+                    {entry.error && (
+                      <div className="lottery-edit__message" role="alert">
+                        Entered lottery figures could not be loaded; POS figures are shown.
+                      </div>
+                    )}
+                    <LotteryEditBlock
                       title="Lottery Tickets Sold"
                       note={
-                        lotto.split
+                        lottery.split
                           ? `${dayLabel} · scratch-off tickets sold at the register.`
                           : `${dayLabel} · all lottery sold at the register. This register does not separate scratch-off and online.`
                       }
-                      symbol="$"
-                      type="money"
-                      countLabel="tickets"
                       rows={ticketsSoldRows}
+                      fields={lottery.fields}
+                      kinds={LOTTERY_FIELDS}
+                      canEdit={canEditLottery}
+                      onSave={saveLottery}
+                      lastEdited={lastEdited}
                     />
-                    <SummaryBlock
+                    <LotteryEditBlock
                       title="Lottery/Lotto Reading"
-                      note="Cashes are all lottery winnings paid at the register (the register does not split online and scratch-off). Settlement, adjustment, credits and commission are not recorded by the register and show 0.00."
-                      symbol="$"
-                      type="money"
-                      countLabel="tickets"
+                      note="Cashes are all lottery winnings paid at the register (the register does not split online and scratch-off). Settlement, adjustment, credits and commission are not recorded by the register: 0.00 until admin or staff enter them."
                       rows={readingRows}
+                      fields={lottery.fields}
+                      kinds={LOTTERY_FIELDS}
+                      canEdit={canEditLottery}
+                      onSave={saveLottery}
+                      lastEdited={lastEdited}
                       totalLabel="Balance"
-                      total={lotto.balance}
+                      total={lottery.balance}
                     />
                   </div>
                 )}
