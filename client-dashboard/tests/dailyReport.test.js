@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { merchandiseRows, fuelRows } from '../src/pages/DailyReportPage.jsx';
+import { merchandiseRows, fuelRows, lotteryReport } from '../src/pages/DailyReportPage.jsx';
 import { sumCents, fromCents, sumMilli, fromMilli } from '../src/num.js';
 
 const row = (dept_number, dept_name, sales_class, net_sales) => ({ dept_number, dept_name, sales_class, net_sales });
@@ -40,5 +40,42 @@ describe('fuelRows', () => {
 
   it('handles no data', () => {
     expect(fuelRows(undefined)).toEqual([]);
+  });
+});
+
+const lot = (dept_number, dept_name, sales_class, units_sold, net_sales) =>
+  ({ dept_number, dept_name, sales_class, units_sold, net_sales });
+
+describe('lotteryReport', () => {
+  it('splits scratch-off / online when the register has both departments (Gilbarco 800, 2026-10-24)', () => {
+    const r = lotteryReport([
+      lot(5, 'LOTTO SCRATCH OFF', 'lottery_sale', '257.000', '655.00'),
+      lot(57, 'LOTTO ONLINE', 'lottery_sale', '47.000', '760.00'),
+      lot(6, 'LOTTO PAID OUT', 'lottery_payout', '43.000', '-934.00'),
+      lot(3, 'Beer', 'merchandise', '10.000', '99.00'),
+    ]);
+    expect(r.split).toBe(true);
+    expect(r.scratch).toMatchObject({ amount: '655.00', tickets: 257 });
+    expect(r.online).toMatchObject({ amount: '760.00', tickets: 47 });
+    expect(r.cashes).toMatchObject({ amount: '934.00', tickets: 43 });
+    expect(r.balance).toBe('-174.00');
+  });
+
+  it('uses one combined sales figure when the register has a single Lotto department (Verifone 8730, 2026-10-15)', () => {
+    const r = lotteryReport([
+      lot(29, 'Lotto', 'lottery_sale', '51.000', '852.00'),
+      lot(28, 'Lotto Payout', 'lottery_payout', '-20.000', '-1063.00'),
+    ]);
+    expect(r.split).toBe(false);
+    expect(r.combined).toMatchObject({ amount: '852.00', tickets: 51 });
+    expect(r.cashes).toMatchObject({ amount: '1063.00', tickets: 20 });
+    expect(r.balance).toBe('-211.00');
+  });
+
+  it('shows 0.00 with no ticket count when there was no lottery', () => {
+    const r = lotteryReport([]);
+    expect(r.combined).toEqual({ amount: '0.00', cents: 0, tickets: null });
+    expect(r.cashes.amount).toBe('0.00');
+    expect(r.balance).toBe('0.00');
   });
 });

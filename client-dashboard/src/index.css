@@ -2104,3 +2104,35 @@ a:hover {
   background-color: var(--bg-subtle);
   border-bottom: none;
 }
+
+.daily-report__table .daily-report__symbol--plus {
+  color: var(--success);
+}
+
+.daily-report__table .daily-report__symbol--minus {
+  color: var(--danger);
+}
+
+.daily-report__table .daily-report__count {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding-left: 0;
+}
+
+.daily-report__section {
+  margin-bottom: 1.5rem;
+}
+
+.daily-report__section-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border-strong);
+  max-width: 1080px;
+}
