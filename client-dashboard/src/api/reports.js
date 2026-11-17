@@ -131,6 +131,17 @@ export async function getFuel(vendor, params) {
 }
 
 /**
+ * Payments report (money taken per payment type).
+ * @param {'VERIFONE'|'GILBARCO'} vendor
+ * @param {{ store: string, from: string, to: string, byDay?: boolean }} params
+ */
+export async function getPayments(vendor, params) {
+  const prefix = getServicePrefix(vendor);
+  const url = `${prefix}/api/reports/payments${toQueryString(params)}`;
+  return requestWithMeta(url);
+}
+
+/**
  * Cash movements report.
  * @param {'VERIFONE'|'GILBARCO'} vendor
  * @param {{ store: string, from: string, to: string, kind?: string }} params

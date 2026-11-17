@@ -2136,3 +2136,87 @@ a:hover {
   border-bottom: 2px solid var(--border-strong);
   max-width: 1080px;
 }
+
+/* Money In (left) | Money Out (right); stacked on narrow screens. Inside each, blocks stack. */
+.daily-report__columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 2rem;
+  align-items: start;
+}
+
+.daily-report__columns .daily-report__grid {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: none;
+}
+
+.daily-report__columns .daily-report__section-title {
+  max-width: none;
+}
+
+@media (max-width: 900px) {
+  .daily-report__columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Day totals: sticky bar at the bottom of the Daily report, Money In left | Money Out right. */
+.daily-report__totals {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 2rem;
+  margin-top: 0.5rem;
+  padding: 0.85rem 1.35rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.daily-report__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.daily-report__total-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.daily-report__total-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+@media (max-width: 600px) {
+  .daily-report__totals {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+    padding: 0.7rem 1rem;
+  }
+}
+
+.daily-report__total--in .daily-report__total-value {
+  color: var(--success);
+}
+
+.daily-report__total--out .daily-report__total-value {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) and (min-width: 601px) {
+  .daily-report__totals {
+    gap: 0 1.25rem;
+  }
+  .daily-report__total {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+}
