@@ -1,0 +1,87 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#f6f8fa", "primaryTextColor": "#1f2328", "primaryBorderColor": "#8c959f", "secondaryColor": "#f6f8fa", "tertiaryColor": "#ffffff", "lineColor": "#57606a", "textColor": "#1f2328", "clusterBkg": "#fafbfc", "clusterBorder": "#d0d7de", "titleColor": "#1f2328", "edgeLabelBackground": "#ffffff", "nodeTextColor": "#1f2328"}}}%%
+%% reporting-service :8094 - Architecture & Request Flow
+flowchart TB
+    subgraph CLIENT["CLIENT APPLICATION"]
+        CP["client-portal (React :5173/5174)<br/>Client Users / HOR Staff / Platform Admin"]
+    end
+
+    subgraph EDGE["EDGE & INGRESS"]
+        NG["nginx :443 Reverse Proxy<br/>/api/reporting/** -> 127.0.0.1:8094"]
+    end
+
+    subgraph AUTH["AUTH SERVICE (:8091)"]
+        AS["auth-service<br/>RS256 JWT Issuer<br/>JWKS Endpoint: /api/auth/.well-known/jwks.json"]
+    end
+
+    subgraph REPORTING_SVC["REPORTING SERVICE (:8094) - Spring Boot 4.1"]
+        direction TB
+
+        subgraph SEC["Security & Context Extraction"]
+            SEC_FILTER["HorHttpSecurity & AuthCookieTokenResolver<br/>Extracts hor_access cookie"]
+            JWT_DEC["NimbusJwtDecoder (JWKS cached)<br/>Verifies RS256 signature"]
+            PRINCIPAL["HorPrincipal<br/>id, role, name, allStores, storeIds"]
+        end
+
+        subgraph STORE_SEC["Store Access Enforcement"]
+            STORE_RES["StoreResolver<br/>Resolves store_code / store_id"]
+            STORE_GUARD["StoreAccess.requireStore()<br/>Enforces principal.storeIds() check<br/>Throws 404 DomainException if unauthorized"]
+        end
+
+        subgraph ROUTING["Vendor Dynamic Routing Engine"]
+            DISPATCH["ReportRouterService<br/>Inspects store.pos_vendor"]
+            V_SVC["VerifoneReportService<br/>Translates unified queries to CPJ / report schema"]
+            G_SVC["GilbarcoReportService<br/>Translates unified queries to PJR / rpt_* views"]
+        end
+
+        subgraph DS_LAYER["Multi-DataSource Layer"]
+            AUTH_DS["AuthDataSource<br/>(auth_db - core.stores)"]
+            V_DS["VerifoneDataSource<br/>(verifone_db - read only)"]
+            G_DS["GilbarcoDataSource<br/>(gilbarco_db - read only)"]
+        end
+    end
+
+    subgraph DATABASES["PostgreSQL 16 / 17 Cluster"]
+        AUTH_DB[("auth_db<br/>core.stores<br/>store metadata & assignments")]
+        V_DB[("verifone_db<br/>schema: master, cpj, report<br/>CPJ closed day reports")]
+        G_DB[("gilbarco_db<br/>schema: pjr / report<br/>PJR Passport event reports")]
+    end
+
+    %% Client flow
+    CP -->|"HTTPS Request + hor_access Cookie"| NG
+    NG -->|"/api/reporting/**"| SEC_FILTER
+    SEC_FILTER --> JWT_DEC
+    JWT_DEC -.->|"Fetch / Cache JWKS"| AS
+    JWT_DEC --> PRINCIPAL
+
+    %% Store verification
+    PRINCIPAL --> STORE_GUARD
+    STORE_RES --> STORE_GUARD
+    STORE_RES -.->|"Fetch store vendor & metadata"| AUTH_DS
+    AUTH_DS -->|"SELECT store_id, code, pos_vendor"| AUTH_DB
+
+    %% Routing flow
+    STORE_GUARD -->|"Authorized Store Context"| DISPATCH
+    DISPATCH -->|"pos_vendor == VERIFONE"| V_SVC
+    DISPATCH -->|"pos_vendor == GILBARCO"| G_SVC
+
+    %% Database queries
+    V_SVC --> V_DS
+    G_SVC --> G_DS
+    V_DS -->|"SELECT from report.* views (read-only)"| V_DB
+    G_DS -->|"SELECT from rpt_* views (read-only)"| G_DB
+
+    %% Response
+    V_SVC -->|"Unified Report DTO / CSV"| CP
+    G_SVC -->|"Unified Report DTO / CSV"| CP
+
+    classDef client fill:#dcefe2,stroke:#2f7d4a,color:#1f2328
+    classDef edge fill:#fff8e1,stroke:#b08800,color:#1f2328
+    classDef auth fill:#dfe8fb,stroke:#2b57c0,color:#1f2328
+    classDef svc fill:#f0ebfa,stroke:#6f42c1,color:#1f2328
+    classDef data fill:#faf8fd,stroke:#c3b1e1,color:#1f2328
+
+    class CP client
+    class NG edge
+    class AS auth
+    class SEC_FILTER,JWT_DEC,PRINCIPAL,STORE_RES,STORE_GUARD,DISPATCH,V_SVC,G_SVC,AUTH_DS,V_DS,G_DS svc
+    class AUTH_DB,V_DB,G_DB data
